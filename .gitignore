@@ -1,3 +1,4 @@
 myenv
 .spyproject
 askindex.py.log
+.vscode/ 
