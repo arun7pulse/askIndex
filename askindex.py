@@ -1,4 +1,7 @@
-#Author ArunSK.
+#!/usr/bin/env python3
+# Author : ArunSanthoshKumar Annnamalai. (@arun7pulse)
+# Description : This is the library program for my trade algo.
+
 import os
 import logging
 import requests
@@ -23,28 +26,33 @@ try:
     LOGFILE = "{}.log".format(os.path.basename(__file__))
     logging.basicConfig(level=logging.INFO, filename=LOGFILE, filemode='a')
     rootLogger = logging.getLogger()
-    logFormatter = logging.Formatter("%(asctime)s %(name)s [%(threadName)-12.12s] [%(levelname)-5.5s] %(message)s")
+    logFormatter = logging.Formatter(
+        "%(asctime)s %(name)s [%(threadName)-12.12s] [%(levelname)-5.5s] %(message)s")
     fileHandler = logging.FileHandler(LOGFILE)
     fileHandler.setFormatter(logFormatter)
     rootLogger.addHandler(fileHandler)
 except NameError:
     pass
 
+
 def last_thursday():
     today = datetime.today().date()
     offset = (today.weekday() - 3) % 7
     return today - timedelta(days=offset)
 
+
 def last_weekday(d=datetime.today(), weekday=4):
     offset = (d.weekday() - weekday) % 7
     return (d - timedelta(days=offset)).date()
 
+
 def next_weekday(d=datetime.today(), weekday=4):
     days_ahead = weekday - d.weekday()
-    if days_ahead <= 0: # Target day already happened this week
+    if days_ahead <= 0:  # Target day already happened this week
         days_ahead += 7
     return (d + timedelta(days_ahead)).date()
-    
+
+
 def split_date_range(start, end, pdays=92):
     firstDate = datetime.strptime(start, "%d-%m-%Y")
     lastDate = datetime.strptime(end, "%d-%m-%Y")
@@ -61,27 +69,31 @@ def split_date_range(start, end, pdays=92):
     for sdate, edate in zip(startdatelist, enddatelist):
         yield sdate, edate
 
+
 def get_hist_index_data(symbol="NIFTY 50"):
     file = f"{symbol}.csv"
-    try :
+    try:
         df = pd.read_csv(file, parse_dates=True, index_col='date',
-                     dayfirst=True, error_bad_lines=False).replace("-", method='bfill')
+                         dayfirst=True, error_bad_lines=False).replace("-", method='bfill')
         print("Hist data Loaded from Local file: ", symbol)
-    except Exception as f: 
+    except Exception as f:
         print("NO local File, Loading from Github", f)
         if symbol.upper() == "NIFTY 50":
             file = "https://raw.githubusercontent.com/arun7pulse/askindex/master/NIFTY%2050.csv"
         if symbol.upper() == "NIFTY BANK":
             file = "https://raw.githubusercontent.com/arun7pulse/askindex/master/NIFTY%20BANK.csv"
         df = pd.read_csv(file, parse_dates=True, index_col='date',
-                     dayfirst=True, error_bad_lines=False).replace("-", method='bfill')
+                         dayfirst=True, error_bad_lines=False).replace("-", method='bfill')
     df = df.astype({"symbol": "category", "open": "float64", "high": "float64",
                     "low": "float64", "close": "float64", "volume": "float64", "value": "float64"})
     return df
 
+
 def get_daily_index_data(symbol="NIFTY 50", start=None, end=None):
-    end = (datetime.today().date()).strftime('%d-%m-%Y') if end == None else end
-    start = (datetime.today().date()-timedelta(days=99)).strftime('%d-%m-%Y') if start ==  None else start
+    end = (datetime.today().date()).strftime(
+        '%d-%m-%Y') if end == None else end
+    start = (datetime.today().date()-timedelta(days=99)
+             ).strftime('%d-%m-%Y') if start == None else start
     if start != end:
         url1 = "https://www1.nseindia.com/products/dynaContent/equities/indices/historicalindices.jsp?indexType="
         url2 = symbol.replace(" ", "%20").replace("&", "%26").upper()
@@ -96,7 +108,8 @@ def get_daily_index_data(symbol="NIFTY 50", start=None, end=None):
                 df.index.names = ['date']
                 df = df[:-1]
                 df = df.dropna(axis='rows')
-                df.rename(columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Shares Traded': 'volume', 'Turnover ( Cr)': 'value'}, inplace=True)
+                df.rename(columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close',
+                          'Shares Traded': 'volume', 'Turnover ( Cr)': 'value'}, inplace=True)
                 df['symbol'] = symbol
                 df.index = pd.to_datetime(df.index)
                 df.sort_index(inplace=True)
@@ -106,10 +119,11 @@ def get_daily_index_data(symbol="NIFTY 50", start=None, end=None):
     print("start date and end date is same")
     return None
 
+
 def get_all_index_data(symbol='NIFTY 50', start='01-01-2010', end=(datetime.today().date()).strftime('%d-%m-%Y')):
     idx = pd.DataFrame()
     idx = idx.append(get_hist_index_data(symbol=symbol))
-    # if idx.index[-1].values 
+    # if idx.index[-1].values
     start = (idx.index.max()+timedelta(days=1)).strftime('%d-%m-%Y')
     for sdate, edate in split_date_range(start, end):
         print("Loading Index Data :", symbol, sdate, edate)
@@ -118,20 +132,26 @@ def get_all_index_data(symbol='NIFTY 50', start='01-01-2010', end=(datetime.toda
     idx.to_csv("{}.csv".format(symbol))
     try:
         idx = idx.replace("-", method='bfill')
-        idx = idx.astype({"symbol": "category", "open": "float64", "high": "float64", "low": "float64", "close": "float64", "volume": "float64", "value": "float64"})
+        idx = idx.astype({"symbol": "category", "open": "float64", "high": "float64",
+                         "low": "float64", "close": "float64", "volume": "float64", "value": "float64"})
     except:
         pass
     return idx
 
+
 def dataframe_target(df, top_percent=5):
-    df['ltgt'] = ((1 + round((df[df['high_pct'] < 0].quantile(top_percent/100)['high_pct'])/100, 4)) * df['close'].shift()).fillna(method='bfill')
-    df['utgt'] = ((1 + round((df[df['low_pct'] > 0].quantile(1-top_percent/100)['low_pct'])/100, 4)) * df['close'].shift()).fillna(method='bfill')
+    df['ltgt'] = ((1 + round((df[df['high_pct'] < 0].quantile(top_percent/100)
+                  ['high_pct'])/100, 4)) * df['close'].shift()).fillna(method='bfill')
+    df['utgt'] = ((1 + round((df[df['low_pct'] > 0].quantile(1-top_percent/100)
+                  ['low_pct'])/100, 4)) * df['close'].shift()).fillna(method='bfill')
     df['stat'] = df['close'].between(df['ltgt'], df['utgt'], inclusive=False)
-    df['miss'] = np.where(df['stat'] == False, np.where(df['utgt'] < df['close'], round(df['close'] - df['utgt'], 2), round(df['close'] - df['ltgt'], 2)), "PROFIT")
-    return df 
+    df['miss'] = np.where(df['stat'] == False, np.where(df['utgt'] < df['close'], round(
+        df['close'] - df['utgt'], 2), round(df['close'] - df['ltgt'], 2)), "PROFIT")
+    return df
+
 
 class Indices(object):
-    def __init__(self, symbol="NIFTY 50"): # OR "NIFTY BANK"
+    def __init__(self, symbol="NIFTY 50"):  # OR "NIFTY BANK"
         self.symbol = symbol
         self.load_histdata()
 
@@ -148,27 +168,34 @@ class Indices(object):
         self.calc_frequency()
 
     def calc_frequency(self, sample='W-THU'):
-        self.df = self.df.join((self.df.pct_change()*100), rsuffix='_pct').fillna(method='bfill')
-        ohlcvv = {'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum', 'value': 'sum'}
-        #Weekly Data Based on Thursday 
+        self.df = self.df.join((self.df.pct_change()*100),
+                               rsuffix='_pct').fillna(method='bfill')
+        ohlcvv = {'open': 'first', 'high': 'max', 'low': 'min',
+                  'close': 'last', 'volume': 'sum', 'value': 'sum'}
+        # Weekly Data Based on Thursday
         self.dfw = self.df.resample(sample, label='right').agg(ohlcvv)
         self.dfwm = self.dfw.resample("BM", label='right').agg(ohlcvv)
-        self.dfw = self.dfw.join((self.dfw.pct_change()*100), rsuffix='_pct').fillna(method='bfill')
-        self.dfwm = self.dfwm.join((self.dfwm.pct_change()*100), rsuffix='_pct').fillna(method='bfill')
-        #Weekly Data Based on Friday
+        self.dfw = self.dfw.join(
+            (self.dfw.pct_change()*100), rsuffix='_pct').fillna(method='bfill')
+        self.dfwm = self.dfwm.join(
+            (self.dfwm.pct_change()*100), rsuffix='_pct').fillna(method='bfill')
+        # Weekly Data Based on Friday
         nesample = "W-FRI"
         self.dfwf = self.df.resample(nesample, label='right').agg(ohlcvv)
         self.dfwfm = self.dfwf.resample("BM", label='right').agg(ohlcvv)
-        self.dfwf = self.dfwf.join((self.dfwf.pct_change()*100), rsuffix='_pct').fillna(method='bfill')
-        self.dfwfm = self.dfwfm.join((self.dfwfm.pct_change()*100), rsuffix='_pct').fillna(method='bfill')
+        self.dfwf = self.dfwf.join(
+            (self.dfwf.pct_change()*100), rsuffix='_pct').fillna(method='bfill')
+        self.dfwfm = self.dfwfm.join(
+            (self.dfwfm.pct_change()*100), rsuffix='_pct').fillna(method='bfill')
         self.calc_targets()
-        
+
     def calc_targets(self):
         self.df = dataframe_target(self.df)
         self.dfw = dataframe_target(self.dfw)
         self.dfwm = dataframe_target(self.dfwm)
         self.dfwf = dataframe_target(self.dfwf)
         self.dfwfm = dataframe_target(self.dfwfm)
+
 
 if __name__ == '__main__':
     nf = Indices("NIFTY 50")
